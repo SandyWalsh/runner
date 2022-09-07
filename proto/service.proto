@@ -1,0 +1,55 @@
+syntax = "proto3";
+package main;
+option go_package = "github.com/SandyWalsh/runner/gen";
+
+message AuthRequest {
+    string username = 1;
+}
+
+message LaunchRequest {
+    string sessionID = 1;
+    string cmd = 2;
+    repeated string arg = 3;
+}
+
+message NoArg {};
+
+message Status {
+    enum StatusEnum {
+        ERROR = 0;
+        RUNNING = 1;
+        COMPLETED = 2;
+    }
+    StatusEnum status = 1;
+    int32 ExitCode = 2;
+}
+
+enum Error {
+    NOERROR = 0;
+    AUTHERROR = 1;   
+}
+
+message Output {
+    string line = 1;
+}
+
+message Process {
+    int32 pid = 1; 
+}
+
+message AuthResponse {
+    string sessionID = 1;    
+}
+
+message GeneralRequest {
+    string sessionID = 1;
+    int32 pid = 2;
+}
+
+service Runner{
+    rpc Auth(AuthRequest) returns (AuthResponse) {};
+    rpc Run(LaunchRequest) returns (Process) {};
+    rpc Stdout(GeneralRequest) returns (stream Output) {};
+    rpc GetStatus(GeneralRequest) returns (Status) {};
+    rpc Abort(GeneralRequest) returns (Status) {};
+}
