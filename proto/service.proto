@@ -19,21 +19,16 @@ message Status {
     int32 ExitCode = 2;
 }
 
-enum Error {
-    NOERROR = 0;
-    AUTHERROR = 1;   
-}
-
 message Output {
     bytes data = 1;
 }
 
 message Process {
-    string pid = 1; 
+    string job_id = 1; 
 }
 
 message GeneralRequest {
-    string pid = 1;
+    string job_id = 1;
 }
 
 service Runner{
