@@ -33,7 +33,7 @@ message GeneralRequest {
 
 service Runner{
     rpc Run(LaunchRequest) returns (Process) {};
-    rpc Stdout(GeneralRequest) returns (stream Output) {};
+    rpc StreamOutput(GeneralRequest) returns (stream Output) {};
     rpc GetStatus(GeneralRequest) returns (Status) {};
     rpc Abort(GeneralRequest) returns (Status) {};
 }
