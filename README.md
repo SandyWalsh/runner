@@ -99,9 +99,10 @@ I'll refer to it as `MRBuffer`
 1. Server will use `UID` field of client's X.509 cert to determine the client -> role mapping (good, better, best)
 1. Server will create cgroups related to the role of the client
 1. Server will launch process with namespace `SysProcAttr`'s related to the role of the client. `stderr` and `stdout` will be sent to `MRBuffer`
+1. NOTE: Server will not run the process directly. Due to a race condition with starting the process and adding the pid to the `cgroup.procs` file we will use a small bash script that starts and immediately pauses itself (via `SIGSTOP`). 
 1. A UUID will be created that maps to the process os pid. This will be returned to the caller. 
 1. The pid will added to the `cgroup.procs` file
-  * Note: there is a race condition here: the process is running but not controlled by the cgroup yet. We can partially alleviate this by immediately sending a `SIGSTOP` to the process, writing the pid to the file, and then sending a `SIGCONT`. But there is still a very slight race condition there. 
+1. Server will `SIGCONT` the wrapper process which will shell `exec` the callers intended process (keeping the original pid)
 1. The Server will `Wait` for the process to end (or be terminated). 
 1. Process state will be tracked via the golang server state and not by calling the os for process status
 1. When the process terminates the related cgroup will be torn down
