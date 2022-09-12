@@ -75,6 +75,8 @@ func (s *StatusTracker) GetStatus() (Status, int) {
 func (s *StatusTracker) SetStatus(st Status, ec int) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+
+	// if we aborted ignore all subsequent attempts to set status
 	if s.Status == Aborted {
 		return
 	}
@@ -82,13 +84,15 @@ func (s *StatusTracker) SetStatus(st Status, ec int) {
 	s.ExitCode = ec
 }
 
-func runCommand(ctx context.Context, wrapper string, spa *syscall.SysProcAttr, out *safeBuffer, cleanup func(), fn string, c string, args ...string) (*exec.Cmd, *StatusTracker, error) {
+func runCommand(ctx context.Context, wrapper string, spa *syscall.SysProcAttr, out *safeBuffer, cleanup func(), fn string, c string, args ...string) (*exec.Cmd, *StatusTracker, <-chan bool, error) {
 	args = append([]string{fn, c}, args...)
 	log.Println("running process:", wrapper, c, args)
 	cmd := exec.Command(wrapper, args...)
 
 	cmd.Stdout = out
 	cmd.Stderr = out
+
+	done := make(chan bool)
 
 	cmd.SysProcAttr = spa // linux namespace controls
 
@@ -115,9 +119,9 @@ func runCommand(ctx context.Context, wrapper string, spa *syscall.SysProcAttr, o
 			tracker.SetStatus(Completed, 0)
 		}
 		log.Println("... process ended")
-
+		done <- true
 		cleanup()
 	}()
 
-	return cmd, tracker, nil
+	return cmd, tracker, done, nil
 }

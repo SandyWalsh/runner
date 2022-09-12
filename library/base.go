@@ -20,6 +20,7 @@ type runningProcess struct {
 	sender  Sender
 	output  *safeBuffer
 	tracker *StatusTracker
+	done    <-chan bool
 	pid     int
 	tempdir string
 }
@@ -125,14 +126,14 @@ func (r *RunnerImpl) Run(ctx context.Context, client string, cmd string, args ..
 	fn := fmt.Sprintf("/sys/fs/cgroup/%s", puuid)
 
 	var buf safeBuffer
-	ps, st, err := runCommand(ctx, r.wrapperPath, cg.SysProcAttr, &buf, cleanup(r, puuid), fn, cmd, args...)
+	ps, st, done, err := runCommand(ctx, r.wrapperPath, cg.SysProcAttr, &buf, cleanup(r, puuid), fn, cmd, args...)
 	if err != nil {
 		r.internalCleanup(puuid)
 		return "", err
 	}
 
 	if ps.Process != nil {
-		r.addRunningProcess(puuid, &runningProcess{cmd: ps, output: &buf, tracker: st, pid: ps.Process.Pid, tempdir: dir})
+		r.addRunningProcess(puuid, &runningProcess{cmd: ps, output: &buf, tracker: st, pid: ps.Process.Pid, tempdir: dir, done: done})
 		return puuid, nil
 	}
 	r.internalCleanup(puuid)
@@ -162,6 +163,10 @@ func (r *RunnerImpl) StreamOutput(ctx context.Context, p Process, sender Sender)
 		return err
 	}
 
+	if st, _ := rp.tracker.GetStatus(); st != Running {
+		return errors.New("process is not running")
+	}
+
 	rp.sender = sender
 
 	log.Println("starting stdout stream")
@@ -172,8 +177,13 @@ func (r *RunnerImpl) StreamOutput(ctx context.Context, p Process, sender Sender)
 	reader := rp.output.NewReader()
 	for {
 		select {
+		// look for signal when the process ends so we can bail out of here
+		// and not require the client to do any status polling.
+		case <-rp.done:
+			log.Println("process finished")
+			done = true
 		case <-sender.GetContext().Done():
-			log.Println("context Done - closing stream")
+			log.Println("context Done")
 			done = true
 		default:
 			b := make([]byte, 256)
@@ -194,7 +204,7 @@ func (r *RunnerImpl) StreamOutput(ctx context.Context, p Process, sender Sender)
 			break
 		}
 	}
-	log.Println("closing stdout stream")
+	log.Println("closing output stream")
 
 	return nil
 }
