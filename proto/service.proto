@@ -1,0 +1,39 @@
+syntax = "proto3";
+package main;
+option go_package = "github.com/SandyWalsh/runner/gen";
+
+
+message LaunchRequest {
+    string cmd = 1;
+    repeated string arg = 2;
+}
+
+message Status {
+    enum StatusEnum {
+        ERROR = 0;
+        RUNNING = 1;
+        COMPLETED = 2;
+        ABORTED = 3;
+    }
+    StatusEnum status = 1;
+    int32 ExitCode = 2;
+}
+
+message Output {
+    bytes data = 1;
+}
+
+message Process {
+    string job_id = 1; 
+}
+
+message GeneralRequest {
+    string job_id = 1;
+}
+
+service Runner{
+    rpc Run(LaunchRequest) returns (Process) {};
+    rpc StreamOutput(GeneralRequest) returns (stream Output) {};
+    rpc GetStatus(GeneralRequest) returns (Status) {};
+    rpc Abort(GeneralRequest) returns (Status) {};
+}
