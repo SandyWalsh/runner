@@ -25,15 +25,25 @@ type runningProcess struct {
 }
 
 type RunnerImpl struct {
-	running map[Process]*runningProcess
-	authz   AuthZRules
-	mtx     sync.Mutex
+	running     map[Process]*runningProcess
+	authz       AuthZRules
+	wrapperPath string
+	mtx         sync.Mutex
 }
 
 func NewRunner(ns string, a AuthZRules) *RunnerImpl {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	wrapper := fmt.Sprintf("%s/../wrapper/wrapper", cwd)
+	wrapper = path.Clean(wrapper)
+
 	return &RunnerImpl{
-		running: map[Process]*runningProcess{},
-		authz:   a,
+		running:     map[Process]*runningProcess{},
+		wrapperPath: wrapper,
+		authz:       a,
 	}
 }
 
@@ -108,25 +118,19 @@ func (r *RunnerImpl) Run(ctx context.Context, client string, cmd string, args ..
 		return "", err
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
 	os.Chdir(dir)
-
-	wrapper := fmt.Sprintf("%s/../wrapper/wrapper", cwd)
-	wrapper = path.Clean(wrapper)
 
 	makeCGroups(cg, puuid)
 
 	fn := fmt.Sprintf("/sys/fs/cgroup/%s", puuid)
 
 	var buf safeBuffer
-	ps, st, err := runCommand(ctx, wrapper, cg.SysProcAttr, &buf, cleanup(r, puuid), fn, cmd, args...)
+	ps, st, err := runCommand(ctx, r.wrapperPath, cg.SysProcAttr, &buf, cleanup(r, puuid), fn, cmd, args...)
 	if err != nil {
 		r.internalCleanup(puuid)
 		return "", err
 	}
+
 	if ps.Process != nil {
 		r.addRunningProcess(puuid, &runningProcess{cmd: ps, output: &buf, tracker: st, pid: ps.Process.Pid, tempdir: dir})
 		return puuid, nil
