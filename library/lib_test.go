@@ -39,7 +39,7 @@ func TestAuth(t *testing.T) {
 	fcg := &fakeCgroup{}
 	lr := library.NewRunner(authz, fcg)
 	ctx := context.Background()
-	pid, err := lr.Run(ctx, "test", "ls", "-la")
+	pid, err := lr.Run(ctx, "bad_actor", "ls", "-la")
 	if err == nil {
 		t.Fatal("expected auth err, got none")
 	}

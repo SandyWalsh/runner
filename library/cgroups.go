@@ -30,8 +30,6 @@ func (r *RealCgroup) MakeCgroup(cg *ControlGroup, ppid Process) error {
 			return err
 		}
 	}
-	fn := fmt.Sprintf("%s/cpuset.cpus", group)
-	alterController("1", fn)
 
 	// Now we can write the actual cgroup limits ...
 	for _, l := range cg.Limits {
@@ -49,10 +47,10 @@ func (r *RealCgroup) Run(ctx context.Context, wrapper string, spa *syscall.SysPr
 	cmd.Stdout = out
 	cmd.Stderr = out
 
-	done := make(chan bool)
-
+	// NOTE: experimental - we may need to do this in the wrapper.
 	cmd.SysProcAttr = spa // linux namespace controls
 
+	done := make(chan bool)
 	tracker := &StatusTracker{Status: Unavailable}
 
 	if err := cmd.Start(); err != nil {

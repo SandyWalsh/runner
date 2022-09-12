@@ -128,3 +128,58 @@ There are a number of security concerns with such a service:
 * the uid/gid for the user to run the processes as will be hardcoded
 * The TLS certs will be stored in source control. Ideally these should be in a good secret manager and merged at runtime. 
 
+## Sample ControlGroup and Authz structure
+When initializing the runner library we need to pass in the authz rules that are applied when a caller attempts to run a process. 
+These authz rules are a collection of cgroup values and, eventually, `SysProcAttr` values. 
+
+In the sample `AuthzRules` structure below, we are defining three styles of cgroup and the related settings. Additionally we define the caller cert `UID` to role mapping. 
+
+NOTE: cores, processors, memory capacity and sta devices will need to be queried from you target system. These values are just examples. 
+
+```
+	good := library.ControlGroup{
+		Name: "good",
+		Limits: []library.Limit{
+			{Var: "cpuset.cpus", Value: "1"},
+			{Var: "cpu.max", Value: "100000 1000000"},
+			{Var: "cpu.weight", Value: "50"},
+			{Var: "memory.max", Value: "250M"},
+			{Var: "io.max", Value: "259:0 rbps=2097152 wiops=120"},
+		},
+		SysProcAttr: &syscall.SysProcAttr{
+			Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+		}}
+
+	better := library.ControlGroup{
+		Name: "better",
+		Limits: []library.Limit{
+			{Var: "cpuset.cpus", Value: "1"},
+			{Var: "cpu.max", Value: "250000 1000000"},
+			{Var: "cpu.weight", Value: "100"},
+			{Var: "memory.max", Value: "500M"},
+			{Var: "io.max", Value: "259:0 rbps=4194304 wiops=240"},
+		},
+		SysProcAttr: &syscall.SysProcAttr{
+			Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+		}}
+
+	best := library.ControlGroup{
+		Name: "best",
+		Limits: []library.Limit{
+			{Var: "cpuset.cpus", Value: "1"},
+			{Var: "cpu.max", Value: "500000 1000000"},
+			{Var: "cpu.weight", Value: "150"},
+			{Var: "memory.max", Value: "1G"},
+			{Var: "io.max", Value: "259:0 rbps=8388608 wiops=360"},
+		},
+		SysProcAttr: &syscall.SysProcAttr{
+			Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+		}}
+
+	authz := library.AuthZRules{
+		ControlGroups:  []library.ControlGroup{good, better, best},
+		ClientToCGroup: map[string]string{"cert-A": "good", "cert-B": "better", "cert-C": "best"},
+	}
+
+	runner := library.NewRunner(authz, ...
+```
