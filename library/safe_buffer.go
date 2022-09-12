@@ -5,12 +5,12 @@ import (
 	"sync"
 )
 
-type safeBuffer struct {
+type SafeBuffer struct {
 	mtx  sync.RWMutex
 	data []byte
 }
 
-func (b *safeBuffer) Write(p []byte) (n int, err error) {
+func (b *SafeBuffer) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -21,12 +21,12 @@ func (b *safeBuffer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (b *safeBuffer) NewReader() io.Reader {
+func (b *SafeBuffer) NewReader() io.Reader {
 	return &safeReader{sb: b}
 }
 
 type safeReader struct {
-	sb  *safeBuffer
+	sb  *SafeBuffer
 	off int
 }
 
@@ -44,5 +44,5 @@ func (r *safeReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-var _ io.Writer = (*safeBuffer)(nil)
+var _ io.Writer = (*SafeBuffer)(nil)
 var _ io.Reader = (*safeReader)(nil)

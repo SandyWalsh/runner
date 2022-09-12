@@ -18,7 +18,7 @@ import (
 type runningProcess struct {
 	cmd     *exec.Cmd
 	sender  Sender
-	output  *safeBuffer
+	output  *SafeBuffer
 	tracker *StatusTracker
 	done    <-chan bool
 	pid     int
@@ -30,9 +30,10 @@ type RunnerImpl struct {
 	authz       AuthZRules
 	wrapperPath string
 	mtx         sync.Mutex
+	cgi         CgroupImpl
 }
 
-func NewRunner(ns string, a AuthZRules) *RunnerImpl {
+func NewRunner(a AuthZRules, cgi CgroupImpl) *RunnerImpl {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -44,6 +45,7 @@ func NewRunner(ns string, a AuthZRules) *RunnerImpl {
 	return &RunnerImpl{
 		running:     map[Process]*runningProcess{},
 		wrapperPath: wrapper,
+		cgi:         cgi,
 		authz:       a,
 	}
 }
@@ -121,12 +123,14 @@ func (r *RunnerImpl) Run(ctx context.Context, client string, cmd string, args ..
 
 	os.Chdir(dir)
 
-	makeCGroups(cg, puuid)
+	if err := r.cgi.MakeCgroup(cg, puuid); err != nil {
+		log.Fatalln("unable to make cgroup:", err)
+	}
 
-	fn := fmt.Sprintf("/sys/fs/cgroup/%s", puuid)
+	cgDir := fmt.Sprintf("/sys/fs/cgroup/%s", puuid)
 
-	var buf safeBuffer
-	ps, st, done, err := runCommand(ctx, r.wrapperPath, cg.SysProcAttr, &buf, cleanup(r, puuid), fn, cmd, args...)
+	var buf SafeBuffer
+	ps, st, done, err := r.cgi.Run(ctx, r.wrapperPath, cg.SysProcAttr, &buf, cleanup(r, puuid), cgDir, cmd, args...)
 	if err != nil {
 		r.internalCleanup(puuid)
 		return "", err
