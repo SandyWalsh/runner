@@ -1,4 +1,4 @@
-module github.com/SandyWalsh/runner/library
+module github.com/SandyWalsh/runner/sprinter
 
 go 1.19
 

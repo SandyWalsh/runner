@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -16,35 +17,35 @@ func addProcessToCgroup(fn string, pid int) {
 	}
 	defer file.Close()
 
-	if _, err := file.WriteString(fmt.Sprintf("%d", pid)); err != nil {
+	if _, err := fmt.Fprintf(file, "%d", pid); err != nil {
 		log.Println("failed to add pid to cgroup: ", err)
 		os.Exit(1)
 	}
 }
 
 func main() {
-	// wrapper procfile cmd args...
+	// args[0] = program
+	// args[1] = cgroup.procs filename
+	// args[2] = cmd
+	// args[3:] = args
 	if len(os.Args) < 3 {
 		log.Fatalln("too few args to wrapper")
-		os.Exit(1)
 	}
 	pfile := os.Args[1]
 	cmd := os.Args[2]
 	args := os.Args[3:]
 
-	proc := fmt.Sprintf("%s/%s", pfile, "cgroup.procs")
+	proc := filepath.Join(pfile, "cgroup.procs")
 
 	addProcessToCgroup(proc, os.Getpid())
 
 	b, err := exec.LookPath(cmd)
 	if err != nil {
 		log.Fatalln("cannot find path for cmd:", err)
-		os.Exit(1)
 	}
 
 	err = syscall.Exec(b, args, os.Environ())
 	if err != nil {
 		log.Fatalln("unable to launch program:", err)
-		os.Exit(1)
 	}
 }

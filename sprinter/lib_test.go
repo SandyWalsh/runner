@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"syscall"
 	"testing"
 
 	"github.com/SandyWalsh/runner/sprinter"
@@ -13,37 +12,40 @@ import (
 
 type fakeCgroup struct{}
 
-func (f *fakeCgroup) MakeCgroup(cg *sprinter.ControlGroup, ppid sprinter.Process) error {
+func (f *fakeCgroup) MakeCgroup(dir string, cg sprinter.ControlGroup) error {
 	return nil
 }
 
-func (f *fakeCgroup) Run(ctx context.Context, wrapper string, spa *syscall.SysProcAttr, out *sprinter.SafeBuffer, cleanup func(), cgDir string, c string, args ...string) (*exec.Cmd, *library.StatusTracker, <-chan bool, error) {
+func (f *fakeCgroup) Run(ra sprinter.RunArgs) (*exec.Cmd, *sprinter.StatusTracker, <-chan bool, error) {
 	done := make(chan bool)
-	st := &sprinter.StatusTracker{Status: sprinter.Unavailable}
+	st := &sprinter.StatusTracker{}
 	e := &exec.Cmd{Process: &os.Process{Pid: 1}}
 	return e, st, done, nil
 }
 
 func TestAuth(t *testing.T) {
-	cg := sprinter.ControlGroup{
-		Name: "test",
-		Limits: []sprinter.Limit{
-			{Var: "cpu.max", Value: "100000 1000000"},
-			{Var: "cpu.weight", Value: "50"},
-		}}
+	cg := map[string]sprinter.ControlGroup{
+		"test": {
+			Limits: []sprinter.Limit{
+				{Var: "cpu.max", Value: "100000 1000000"},
+				{Var: "cpu.weight", Value: "50"},
+			}}}
 	authz := sprinter.AuthZRules{
-		ControlGroups:  []sprinter.ControlGroup{cg},
+		ControlGroups:  cg,
 		ClientToCGroup: map[string]string{"caller": "test"},
 	}
 
 	fcg := &fakeCgroup{}
-	lr := sprinter.NewRunner(authz, fcg)
+	lr, err := sprinter.NewRunner(authz, fcg)
+	if err != nil {
+		t.Fatal("unable to initialize sprinter library", err)
+	}
 	ctx := context.Background()
 	pid, err := lr.Run(ctx, "bad_actor", "ls", "-la")
 	if err == nil {
 		t.Fatal("expected auth err, got none")
 	}
-	pid, err = lr.Run(ctx, "caller", "ls", "-la")
+	_, err = lr.Run(ctx, "caller", "ls", "-la")
 	if err != nil {
 		t.Fatal("expected pid, got err: ", err)
 	}

@@ -1,4 +1,4 @@
-package library
+package sprinter
 
 import (
 	"io"

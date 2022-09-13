@@ -1,17 +1,28 @@
-package library
+package sprinter
 
 import "sync"
 
 type StatusTracker struct {
-	Status   Status
-	ExitCode int
+	status   Status
+	exitCode int
 	mtx      sync.Mutex
 }
+
+// Status reflects the status of a running process
+type Status int64
+
+const (
+	Unavailable Status = iota
+	Error
+	Running
+	Completed
+	Aborted
+)
 
 func (s *StatusTracker) GetStatus() (Status, int) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	return s.Status, s.ExitCode
+	return s.status, s.exitCode
 }
 
 func (s *StatusTracker) SetStatus(st Status, ec int) {
@@ -19,9 +30,9 @@ func (s *StatusTracker) SetStatus(st Status, ec int) {
 	defer s.mtx.Unlock()
 
 	// if we aborted ignore all subsequent attempts to set status
-	if s.Status == Aborted {
+	if s.status == Aborted {
 		return
 	}
-	s.Status = st
-	s.ExitCode = ec
+	s.status = st
+	s.exitCode = ec
 }

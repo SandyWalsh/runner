@@ -1,6 +1,6 @@
 syntax = "proto3";
 package main;
-option go_package = "github.com/SandyWalsh/runner/gen";
+option go_package = "github.com/SandyWalsh/runner/sprinter/proto";
 
 
 message LaunchRequest {

@@ -4,13 +4,12 @@ FROM golang:1.19
 
 WORKDIR /runner
 
-WORKDIR gen
-COPY gen/*.go ./
 
-WORKDIR ../library
-COPY library/*.go ./
-COPY library/go.mod ./
-COPY library/go.sum ./
+WORKDIR ../sprinter
+COPY sprinter/*.go ./
+COPY sprinter/go.mod ./
+COPY sprinter/go.sum ./
+COPY sprinter/proto/*.go ./proto/
 RUN go mod download
 RUN go build 
 

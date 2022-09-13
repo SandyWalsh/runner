@@ -1,4 +1,4 @@
-module github.com/SandyWalsh/runner/server/gen
+module github.com/SandyWalsh/runner/sprinter/proto
 
 go 1.19
 
