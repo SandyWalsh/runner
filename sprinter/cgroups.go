@@ -38,7 +38,7 @@ type RunArgs struct {
 // Driver breaks out the cgroup functionality so the tests don't need elevated privileges.
 type Driver interface {
 	MakeCgroup(dir string, cg ControlGroup) error
-	Run(ra RunArgs) (*exec.Cmd, *StatusTracker, <-chan bool, error)
+	Run(ra RunArgs) (*exec.Cmd, *StatusTracker, error)
 }
 
 // Linux driver handles cgroup operations on a linux system
@@ -65,7 +65,7 @@ func (l *LinuxDriver) MakeCgroup(dir string, cg ControlGroup) error {
 	return nil
 }
 
-func (l *LinuxDriver) Run(ra RunArgs) (*exec.Cmd, *StatusTracker, <-chan bool, error) {
+func (l *LinuxDriver) Run(ra RunArgs) (*exec.Cmd, *StatusTracker, error) {
 	args := append([]string{ra.ControlGroupPath, ra.Cmd}, ra.Args...)
 	log.Println("running process:", ra.WrapperPath, args)
 	cmd := exec.Command(ra.WrapperPath, args...)
@@ -75,19 +75,20 @@ func (l *LinuxDriver) Run(ra RunArgs) (*exec.Cmd, *StatusTracker, <-chan bool, e
 	// NOTE: experimental - we may need to do this in the wrapper.
 	cmd.SysProcAttr = ra.SPA // linux namespace controls
 
-	done := make(chan bool)
 	tracker := &StatusTracker{}
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Error running the exec.Command - %s\n", err)
 		ra.Cleanup()
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// wrapper will add pid to procs file
 
 	go func() {
 		tracker.SetStatus(Running, 0)
+
+		// Wait will not return until all writing has completed
 		werr := cmd.Wait()
 		if werr != nil {
 			var ec int
@@ -99,9 +100,9 @@ func (l *LinuxDriver) Run(ra RunArgs) (*exec.Cmd, *StatusTracker, <-chan bool, e
 			tracker.SetStatus(Completed, 0)
 		}
 		log.Println("... process ended")
-		done <- true // shut down any streams
+		ra.Buffer.Close() // send proper EOF from now on
 		ra.Cleanup()
 	}()
 
-	return cmd, tracker, done, nil
+	return cmd, tracker, nil
 }

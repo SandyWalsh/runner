@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -19,17 +18,12 @@ import (
 type Runner interface {
 	Run(ctx context.Context, client string, cmd string, args ...string) (Process, error)
 	GetStatus(ctx context.Context, p Process) (Status, int, error)
-	StreamOutput(ctx context.Context, p Process, sender Sender) error
+	StreamOutput(ctx context.Context, p Process, w io.WriteCloser) error
 	Abort(ctx context.Context, p Process) (Status, error)
 }
 
 // Process is a UUID which maps (internally) to a linux process ID
 type Process string
-
-// Sender allows the library to send stream info to the caller.
-type Sender interface {
-	Send(string) error
-}
 
 type runnerImpl struct {
 	running     map[Process]*runningProcess
@@ -94,14 +88,14 @@ func (r *runnerImpl) Run(ctx context.Context, client string, cmd string, args ..
 
 	log.Println("wrapper", ra.WrapperPath, "cgpath", ra.ControlGroupPath, "cmd", ra.Cmd, "args", ra.Args)
 
-	ps, st, done, err := r.driver.Run(ra)
+	ps, st, err := r.driver.Run(ra)
 	if err != nil {
 		r.internalCleanup(puuid)
 		return "", err
 	}
 
 	if ps.Process != nil {
-		r.addRunningProcess(puuid, &runningProcess{cmd: ps, output: &buf, tracker: st, tempdir: dir, done: done})
+		r.addRunningProcess(puuid, &runningProcess{cmd: ps, output: &buf, tracker: st, tempdir: dir})
 		return puuid, nil
 	}
 	r.internalCleanup(puuid)
@@ -118,59 +112,47 @@ func (r *runnerImpl) GetStatus(ctx context.Context, p Process) (Status, int, err
 	return st, ec, nil
 }
 
-func (r *runnerImpl) StreamOutput(ctx context.Context, p Process, sender Sender) error {
+func (r *runnerImpl) StreamOutput(ctx context.Context, p Process, writer io.WriteCloser) error {
 	var rp *runningProcess
 	var err error
 	if rp, err = r.getRunningProcess(p); err != nil {
 		return err
 	}
 
-	if st, _ := rp.tracker.GetStatus(); st != Running {
-		return errors.New("process is not running")
-	}
-
-	rp.sender = sender // NOTE: CAN'T STORE IN RP
-
 	log.Println("starting stdout stream")
 
 	// NOTE: we can't do this in a goroutine.
 	// If we return from this method the stream will be closed.
-	done := false
-	reader := rp.output.NewReader()
+	reader, newData := rp.output.NewReader()
 	for {
-		done = true
 		select {
-		// look for signal when the process ends so we can bail out of here
-		// and not require the client to do any status polling.
-		//case <-rp.done:
-		//	log.Println("process finished")
-		//	done = true
 		case <-ctx.Done():
-			log.Println("caller context Done")
-		default:
-			done = false
-			b := make([]byte, 256)
+			// caller context done
+			goto done
+		case x := <-newData:
+			if x == 0 {
+				writer.Close()
+				goto done
+			}
+			b := make([]byte, x)
 			n, rerr := reader.Read(b)
-			log.Println("READ", n, rerr, string(b[:n]))
-			if n > 0 {
-				log.Println("SENDING:", string(b[:n]))
-				if serr := sender.Send(string(b[:n])); serr != nil {
-					log.Println("send error:", serr.Error())
-					done = true
+			if n == 0 {
+				if rerr == io.EOF {
+					goto done
+				}
+				if rerr != nil {
+					log.Println("error reading from process stream:", rerr)
+					goto done
 				}
 			}
-
-			if rerr != nil && rerr != io.EOF {
-				done = true
-				log.Println("read error", rerr)
+			if n > 0 {
+				if _, werr := writer.Write(b[:n]); werr != nil {
+					log.Println("stream write error:", werr.Error())
+				}
 			}
-			time.Sleep(time.Second)
-		}
-		if done {
-			break
 		}
 	}
-	log.Println("closing output stream")
+done:
 	return nil
 }
 
@@ -192,10 +174,8 @@ func (r *runnerImpl) Abort(ctx context.Context, p Process) (Status, error) {
 
 type runningProcess struct {
 	cmd     *exec.Cmd
-	sender  Sender
 	output  *SafeBuffer
 	tracker *StatusTracker
-	done    <-chan bool
 	tempdir string
 }
 
@@ -219,7 +199,7 @@ func (r *runnerImpl) internalCleanup(puuid Process) {
 		log.Println("cannot clean up temp dir", rp.tempdir, err)
 	}
 
-	r.removeRunningProcess(puuid)
+	// Do not remove runningProcess entry ... allow callers to still connect.
 }
 
 func cleanup(r *runnerImpl, puuid Process) func() {
@@ -242,10 +222,4 @@ func (r *runnerImpl) getRunningProcess(puuid Process) (*runningProcess, error) {
 		return nil, fmt.Errorf("could not find process %s", puuid)
 	}
 	return rp, nil
-}
-
-func (r *runnerImpl) removeRunningProcess(puuid Process) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	delete(r.running, puuid)
 }
