@@ -137,47 +137,46 @@ In the sample `AuthzRules` structure below, we are defining three styles of cgro
 NOTE: cores, processors, memory capacity and sta devices will need to be queried from you target system. These values are just examples. 
 
 ```
-	good := library.ControlGroup{
-		Name: "good",
-		Limits: []library.Limit{
-			{Var: "cpuset.cpus", Value: "1"},
-			{Var: "cpu.max", Value: "100000 1000000"},
-			{Var: "cpu.weight", Value: "50"},
-			{Var: "memory.max", Value: "250M"},
-			{Var: "io.max", Value: "259:0 rbps=2097152 wiops=120"},
+	cg := map[string]library.ControlGroup{
+		"good": {
+			Limits: []library.Limit{
+				{Var: "cpuset.cpus", Value: "1"},
+				{Var: "cpu.max", Value: "100000 1000000"},
+				{Var: "cpu.weight", Value: "50"},
+				{Var: "memory.max", Value: "250M"},
+				{Var: "io.max", Value: "259:0 rbps=2097152 wiops=120"},
+			},
+			SysProcAttr: &syscall.SysProcAttr{
+				Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+			}
 		},
-		SysProcAttr: &syscall.SysProcAttr{
-			Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
-		}}
-
-	better := library.ControlGroup{
-		Name: "better",
-		Limits: []library.Limit{
-			{Var: "cpuset.cpus", Value: "1"},
-			{Var: "cpu.max", Value: "250000 1000000"},
-			{Var: "cpu.weight", Value: "100"},
-			{Var: "memory.max", Value: "500M"},
-			{Var: "io.max", Value: "259:0 rbps=4194304 wiops=240"},
+		"better": {
+			Limits: []library.Limit{
+				{Var: "cpuset.cpus", Value: "1"},
+				{Var: "cpu.max", Value: "250000 1000000"},
+				{Var: "cpu.weight", Value: "100"},
+				{Var: "memory.max", Value: "500M"},
+				{Var: "io.max", Value: "259:0 rbps=4194304 wiops=240"},
+			},
+			SysProcAttr: &syscall.SysProcAttr{
+				Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+			}
 		},
-		SysProcAttr: &syscall.SysProcAttr{
-			Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
-		}}
-
-	best := library.ControlGroup{
-		Name: "best",
-		Limits: []library.Limit{
-			{Var: "cpuset.cpus", Value: "1"},
-			{Var: "cpu.max", Value: "500000 1000000"},
-			{Var: "cpu.weight", Value: "150"},
-			{Var: "memory.max", Value: "1G"},
-			{Var: "io.max", Value: "259:0 rbps=8388608 wiops=360"},
-		},
-		SysProcAttr: &syscall.SysProcAttr{
-			Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
-		}}
-
+		"best": {
+			Limits: []library.Limit{
+				{Var: "cpuset.cpus", Value: "1"},
+				{Var: "cpu.max", Value: "500000 1000000"},
+				{Var: "cpu.weight", Value: "150"},
+				{Var: "memory.max", Value: "1G"},
+				{Var: "io.max", Value: "259:0 rbps=8388608 wiops=360"},
+			},
+			SysProcAttr: &syscall.SysProcAttr{
+				Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+			}
+		}
+	}
 	authz := library.AuthZRules{
-		ControlGroups:  []library.ControlGroup{good, better, best},
+		ControlGroups:  cg,
 		ClientToCGroup: map[string]string{"cert-A": "good", "cert-B": "better", "cert-C": "best"},
 	}
 
