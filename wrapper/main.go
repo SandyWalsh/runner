@@ -12,14 +12,12 @@ import (
 func addProcessToCgroup(fn string, pid int) {
 	file, err := os.OpenFile(fn, os.O_WRONLY, 0644)
 	if err != nil {
-		log.Println("unable to open", fn, "for writing :", err)
-		os.Exit(1)
+		log.Fatalln("unable to open", fn, "for writing :", err)
 	}
 	defer file.Close()
 
 	if _, err := fmt.Fprintf(file, "%d", pid); err != nil {
-		log.Println("failed to add pid to cgroup: ", err)
-		os.Exit(1)
+		log.Fatalln("failed to add pid to cgroup: ", err)
 	}
 }
 
